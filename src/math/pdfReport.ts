@@ -4,6 +4,7 @@ import { EPSILON } from './balance';
 import {
   buildManagerialDecisionAnalysis,
   buildSensitivityScaffold,
+  buildSlackSaturationAnalysis,
   getZeroRealFlowWarning,
 } from './sensitivity';
 import {
@@ -733,6 +734,148 @@ export function buildAcademicPdfReport(
     },
     columnStyles: {
       0: { halign: 'left', fontStyle: 'bold' },
+    },
+  });
+
+  y = getLastY(doc, y) + 4.5;
+
+  // 5.1 Análisis de Holguras y Saturación de Restricciones
+  const slackAnalysis = buildSlackSaturationAnalysis(balanced, optimal);
+  y = ensureSpace(doc, y, 42);
+  y = drawParagraph(
+    doc,
+    y,
+    '5.1 Análisis de Holguras y Saturación de Restricciones',
+    { fontSize: 10, bold: true, color: [15, 23, 42] }
+  );
+  y = drawParagraph(
+    doc,
+    y,
+    'Detalle del cumplimiento de las restricciones de oferta (almacenes) y demanda (sucursales) en la solución óptima MODI. Las holguras indican inventario no asignado (Destino Ficticio) o demanda insatisfecha (Origen Ficticio) cuando existe desbalanceo.',
+    { fontSize: 8.2, color: [71, 85, 105] }
+  );
+
+  autoTable(doc, {
+    startY: y,
+    margin: PAGE_MARGIN,
+    tableWidth: CONTENT_WIDTH,
+    theme: 'grid',
+    head: [
+      [
+        'Almacén (Oferta)',
+        'Oferta disp.',
+        'Enviado real',
+        'Holgura / Sin asignar',
+        'Estado de restricción',
+      ],
+    ],
+    body: slackAnalysis.supplyRows.map((row) => [
+      pdfSafeText(row.originName),
+      `${fmt(row.supplyAvailable)} u`,
+      `${fmt(row.realShipped)} u`,
+      `${fmt(row.slackUnassigned)} u`,
+      pdfSafeText(row.statusLabel),
+    ]),
+    foot: [
+      [
+        'Total oferta',
+        `${fmt(slackAnalysis.totalSupplyAvailable)} u`,
+        `${fmt(slackAnalysis.totalRealShipped)} u`,
+        `${fmt(slackAnalysis.totalSlackUnassigned)} u`,
+        slackAnalysis.totalSlackUnassigned > EPSILON
+          ? 'Excedente en Destino Ficticio'
+          : 'Oferta 100 % saturada',
+      ],
+    ],
+    showHead: 'everyPage',
+    showFoot: 'lastPage',
+    rowPageBreak: 'avoid',
+    styles: {
+      font: 'helvetica',
+      fontSize: 7.4,
+      cellPadding: 1.7,
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2,
+    },
+    headStyles: {
+      fillColor: [15, 23, 42],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+    },
+    footStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [15, 23, 42],
+      fontStyle: 'bold',
+    },
+    columnStyles: {
+      0: { cellWidth: 42, fontStyle: 'bold' },
+      1: { cellWidth: 26, halign: 'right' },
+      2: { cellWidth: 26, halign: 'right' },
+      3: { cellWidth: 34, halign: 'right' },
+      4: { cellWidth: 54 },
+    },
+  });
+
+  y = getLastY(doc, y) + 3;
+
+  autoTable(doc, {
+    startY: y,
+    margin: PAGE_MARGIN,
+    tableWidth: CONTENT_WIDTH,
+    theme: 'grid',
+    head: [
+      [
+        'Sucursal (Demanda)',
+        'Demanda req.',
+        'Recibido real',
+        'Holgura / Insatisfecha',
+        'Estado de restricción',
+      ],
+    ],
+    body: slackAnalysis.demandRows.map((row) => [
+      pdfSafeText(row.destinationName),
+      `${fmt(row.demandRequired)} u`,
+      `${fmt(row.realReceived)} u`,
+      `${fmt(row.unmetDemand)} u`,
+      pdfSafeText(row.statusLabel),
+    ]),
+    foot: [
+      [
+        'Total demanda',
+        `${fmt(slackAnalysis.totalDemandRequired)} u`,
+        `${fmt(slackAnalysis.totalRealReceived)} u`,
+        `${fmt(slackAnalysis.totalUnmetDemand)} u`,
+        slackAnalysis.totalUnmetDemand > EPSILON
+          ? 'Déficit en Origen Ficticio'
+          : 'Demanda 100 % saturada',
+      ],
+    ],
+    showHead: 'everyPage',
+    showFoot: 'lastPage',
+    rowPageBreak: 'avoid',
+    styles: {
+      font: 'helvetica',
+      fontSize: 7.4,
+      cellPadding: 1.7,
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2,
+    },
+    headStyles: {
+      fillColor: [29, 78, 216],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+    },
+    footStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [15, 23, 42],
+      fontStyle: 'bold',
+    },
+    columnStyles: {
+      0: { cellWidth: 42, fontStyle: 'bold' },
+      1: { cellWidth: 26, halign: 'right' },
+      2: { cellWidth: 26, halign: 'right' },
+      3: { cellWidth: 34, halign: 'right' },
+      4: { cellWidth: 54 },
     },
   });
 

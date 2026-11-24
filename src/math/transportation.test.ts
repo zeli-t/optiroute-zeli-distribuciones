@@ -10,6 +10,7 @@ import {
   buildManagerialDecisionAnalysis,
   buildManagerialScenarioSummary,
   buildRhsSensitivityAnalysis,
+  buildSlackSaturationAnalysis,
   cloneTransportationProblem,
   compareTransportationScenarios,
   evaluateUnbalancedRhsScenario,
@@ -1895,6 +1896,7 @@ test('26. Etapa 7 (Regresión) - PDF A4 sin advertencias de ancho, contenido ín
     assert.ok(zeliPdfText.includes('REPORTE ACADÉMICO DE OPTIMIZACIÓN'));
     assert.ok(zeliPdfText.includes('Contenido del reporte'));
     assert.ok(zeliPdfText.includes('1. Descripción del problema de transporte'));
+    assert.ok(zeliPdfText.includes('5.1 Análisis de Holguras y Saturación de Restricciones'));
     assert.ok(zeliPdfText.includes('8. Análisis de sensibilidad de costos unitarios (Etapa 1)'));
     assert.ok(zeliPdfText.includes('11. Comparación de escenarios: original vs. alternativo (Etapa 4)'));
     assert.ok(zeliPdfText.includes('12. Interpretación gerencial y recomendaciones (Etapa 5)'));
@@ -1923,3 +1925,42 @@ test('26. Etapa 7 (Regresión) - PDF A4 sin advertencias de ancho, contenido ín
     console.warn = origWarn;
   }
 });
+
+test('27. Análisis de holguras y saturación de restricciones (balanceado, exceso y déficit)', () => {
+  const zeliRes = solveTransportationProblem(ZELI_DEFAULT_CASE);
+  const slackZeli = buildSlackSaturationAnalysis(zeliRes.balanced!, zeliRes.optimal!);
+  assert.equal(slackZeli.balanceStatus, 'balanced');
+  assert.equal(slackZeli.totalSupplyAvailable, 250);
+  assert.equal(slackZeli.totalRealShipped, 250);
+  assert.equal(slackZeli.totalSlackUnassigned, 0);
+  assert.equal(slackZeli.totalDemandRequired, 250);
+  assert.equal(slackZeli.totalRealReceived, 250);
+  assert.equal(slackZeli.totalUnmetDemand, 0);
+  assert.ok(slackZeli.supplyRows.every((r) => r.slackUnassigned === 0 && r.utilizationPct === 100));
+  assert.ok(slackZeli.demandRows.every((r) => r.unmetDemand === 0 && r.coveragePct === 100));
+
+  const surplusProb = ACADEMIC_PRESETS.find((p) => p.id === 'zeli_surplus')!.problem;
+  const surplusRes = solveTransportationProblem(surplusProb);
+  const slackSurplus = buildSlackSaturationAnalysis(surplusRes.balanced!, surplusRes.optimal!);
+  assert.equal(slackSurplus.balanceStatus, 'dummy_destination');
+  assert.equal(slackSurplus.totalSlackUnassigned, surplusRes.balanced!.dummyAmount);
+  assert.equal(
+    slackSurplus.totalRealShipped + slackSurplus.totalSlackUnassigned,
+    slackSurplus.totalSupplyAvailable
+  );
+  assert.equal(slackSurplus.totalUnmetDemand, 0);
+  assert.ok(slackSurplus.supplyRows.some((r) => r.slackUnassigned > 0));
+
+  const deficitProb = ACADEMIC_PRESETS.find((p) => p.id === 'zeli_deficit')!.problem;
+  const deficitRes = solveTransportationProblem(deficitProb);
+  const slackDeficit = buildSlackSaturationAnalysis(deficitRes.balanced!, deficitRes.optimal!);
+  assert.equal(slackDeficit.balanceStatus, 'dummy_origin');
+  assert.equal(slackDeficit.totalUnmetDemand, deficitRes.balanced!.dummyAmount);
+  assert.equal(
+    slackDeficit.totalRealReceived + slackDeficit.totalUnmetDemand,
+    slackDeficit.totalDemandRequired
+  );
+  assert.equal(slackDeficit.totalSlackUnassigned, 0);
+  assert.ok(slackDeficit.demandRows.some((r) => r.unmetDemand > 0));
+});
+

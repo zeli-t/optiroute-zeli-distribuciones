@@ -25,6 +25,9 @@ import {
   ScenarioRouteDiff,
   SensitivityScaffold,
   ShadowPriceWorkedExample,
+  SlackDemandRow,
+  SlackSaturationAnalysis,
+  SlackSupplyRow,
   SolveResponse,
   TransportationProblem,
   UnbalancedDummyAllocation,
@@ -2871,5 +2874,123 @@ export function buildSensitivityScaffold(
         implemented: false,
       },
     ],
+  };
+}
+
+/**
+ * Calcula las holguras y saturación de restricciones de oferta (por almacén)
+ * y demanda (por sucursal) a partir de la solución óptima certificada por MODI.
+ */
+export function buildSlackSaturationAnalysis(
+  balanced: BalancedProblem,
+  optimal: OptimalResult
+): SlackSaturationAnalysis {
+  const m = balanced.origins.length;
+  const n = balanced.destinations.length;
+
+  const supplyRows: SlackSupplyRow[] = [];
+  let totalSupplyAvailable = 0;
+  let totalRealShipped = 0;
+  let totalSlackUnassigned = 0;
+
+  for (let i = 0; i < m; i++) {
+    if (i === balanced.dummyRowIndex) continue;
+
+    const supplyAvailable = roundClean(balanced.supply[i]);
+    let realShipped = 0;
+    for (let j = 0; j < n; j++) {
+      if (j === balanced.dummyColIndex) continue;
+      realShipped = roundClean(realShipped + (optimal.allocations[i]?.[j] ?? 0));
+    }
+
+    const slackUnassigned =
+      balanced.dummyColIndex !== null
+        ? roundClean(optimal.allocations[i]?.[balanced.dummyColIndex] ?? 0)
+        : roundClean(Math.max(0, supplyAvailable - realShipped));
+
+    const utilizationPct =
+      supplyAvailable > EPSILON
+        ? roundClean((realShipped / supplyAvailable) * 100)
+        : 100;
+
+    const statusLabel =
+      supplyAvailable <= EPSILON
+        ? 'Sin capacidad disponible (0 u)'
+        : slackUnassigned <= EPSILON
+        ? 'Saturado (100% enviado)'
+        : `Con holgura (${fmt(slackUnassigned)} u al Destino Ficticio)`;
+
+    supplyRows.push({
+      originIndex: i,
+      originName: balanced.origins[i],
+      supplyAvailable,
+      realShipped,
+      slackUnassigned,
+      utilizationPct,
+      statusLabel,
+    });
+
+    totalSupplyAvailable = roundClean(totalSupplyAvailable + supplyAvailable);
+    totalRealShipped = roundClean(totalRealShipped + realShipped);
+    totalSlackUnassigned = roundClean(totalSlackUnassigned + slackUnassigned);
+  }
+
+  const demandRows: SlackDemandRow[] = [];
+  let totalDemandRequired = 0;
+  let totalRealReceived = 0;
+  let totalUnmetDemand = 0;
+
+  for (let j = 0; j < n; j++) {
+    if (j === balanced.dummyColIndex) continue;
+
+    const demandRequired = roundClean(balanced.demand[j]);
+    let realReceived = 0;
+    for (let i = 0; i < m; i++) {
+      if (i === balanced.dummyRowIndex) continue;
+      realReceived = roundClean(realReceived + (optimal.allocations[i]?.[j] ?? 0));
+    }
+
+    const unmetDemand =
+      balanced.dummyRowIndex !== null
+        ? roundClean(optimal.allocations[balanced.dummyRowIndex]?.[j] ?? 0)
+        : roundClean(Math.max(0, demandRequired - realReceived));
+
+    const coveragePct =
+      demandRequired > EPSILON
+        ? roundClean((realReceived / demandRequired) * 100)
+        : 100;
+
+    const statusLabel =
+      demandRequired <= EPSILON
+        ? 'Sin requerimiento (0 u)'
+        : unmetDemand <= EPSILON
+        ? 'Saturada (100% cubierta)'
+        : `Con déficit (${fmt(unmetDemand)} u desde Origen Ficticio)`;
+
+    demandRows.push({
+      destinationIndex: j,
+      destinationName: balanced.destinations[j],
+      demandRequired,
+      realReceived,
+      unmetDemand,
+      coveragePct,
+      statusLabel,
+    });
+
+    totalDemandRequired = roundClean(totalDemandRequired + demandRequired);
+    totalRealReceived = roundClean(totalRealReceived + realReceived);
+    totalUnmetDemand = roundClean(totalUnmetDemand + unmetDemand);
+  }
+
+  return {
+    balanceStatus: balanced.balanceStatus,
+    totalSupplyAvailable,
+    totalRealShipped,
+    totalSlackUnassigned,
+    totalDemandRequired,
+    totalRealReceived,
+    totalUnmetDemand,
+    supplyRows,
+    demandRows,
   };
 }

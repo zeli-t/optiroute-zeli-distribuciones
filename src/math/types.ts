@@ -524,6 +524,38 @@ export interface SensitivityScaffold {
   }[];
 }
 
+export interface SlackSupplyRow {
+  originIndex: number;
+  originName: string;
+  supplyAvailable: number;
+  realShipped: number;
+  slackUnassigned: number;
+  utilizationPct: number;
+  statusLabel: string;
+}
+
+export interface SlackDemandRow {
+  destinationIndex: number;
+  destinationName: string;
+  demandRequired: number;
+  realReceived: number;
+  unmetDemand: number;
+  coveragePct: number;
+  statusLabel: string;
+}
+
+export interface SlackSaturationAnalysis {
+  balanceStatus: BalanceStatus;
+  totalSupplyAvailable: number;
+  totalRealShipped: number;
+  totalSlackUnassigned: number;
+  totalDemandRequired: number;
+  totalRealReceived: number;
+  totalUnmetDemand: number;
+  supplyRows: SlackSupplyRow[];
+  demandRows: SlackDemandRow[];
+}
+
 export interface SolveResponse {
   validation: ValidationResult;
   balanced: BalancedProblem | null;

@@ -12,9 +12,12 @@ import {
   Sparkles,
   TrendingDown,
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { EPSILON } from '../math/balance';
-import { getZeroRealFlowWarning } from '../math/sensitivity';
+import {
+  buildSlackSaturationAnalysis,
+  getZeroRealFlowWarning,
+} from '../math/sensitivity';
 import {
   BalancedProblem,
   MethodComparisonRow,
@@ -103,6 +106,11 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
   const zeroFlowWarning = getZeroRealFlowWarning(
     balanced.originalSupplyTotal,
     balanced.originalDemandTotal
+  );
+
+  const slackAnalysis = useMemo(
+    () => buildSlackSaturationAnalysis(balanced, optimal),
+    [balanced, optimal]
   );
 
   const maxChartCost = Math.max(
@@ -515,7 +523,141 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
           </div>
         </div>
 
-        {/* 4. Matriz detallada de asignaciones (desplegable para mantener la vista limpia) */}
+        {/* 4. Análisis de Holguras y Saturación de Restricciones */}
+        <div className="pt-6 border-t border-slate-200 space-y-4">
+          <div>
+            <h3 className="text-base sm:text-lg font-bold text-[#0B1F3A]">
+              Análisis de Holguras y Saturación de Restricciones
+            </h3>
+            <p className="mt-1 text-xs sm:text-sm text-slate-600">
+              Verifica qué almacenes agotan toda su capacidad (holgura = 0) y qué sucursales reciben el 100 % de su demanda. Cuando existe desbalanceo, las holguras muestran el inventario sin asignar (Destino Ficticio) o la demanda insatisfecha (Origen Ficticio).
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            {/* Tabla de Almacenes (Restricciones de Oferta) */}
+            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-[#0B1F3A] text-white">
+                    <th className="text-left font-semibold py-2.5 px-3">Almacén (Oferta)</th>
+                    <th className="text-right font-semibold py-2.5 px-2.5">Oferta disp.</th>
+                    <th className="text-right font-semibold py-2.5 px-2.5">Enviado real</th>
+                    <th className="text-right font-semibold py-2.5 px-2.5">Holgura / Sin asignar</th>
+                    <th className="text-left font-semibold py-2.5 px-3">Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  {slackAnalysis.supplyRows.map((row) => (
+                    <tr
+                      key={`slack-sup-${row.originIndex}`}
+                      className={row.slackUnassigned > EPSILON ? 'bg-amber-50/40' : 'hover:bg-slate-50/70'}
+                    >
+                      <td className="py-2.5 px-3 font-semibold text-[#0B1F3A] whitespace-nowrap">
+                        {row.originName}
+                      </td>
+                      <td className="py-2.5 px-2.5 text-right font-mono tabular-nums text-slate-800 whitespace-nowrap">
+                        {fmt(row.supplyAvailable)} u
+                      </td>
+                      <td className="py-2.5 px-2.5 text-right font-mono tabular-nums font-semibold text-[#0B1F3A] whitespace-nowrap">
+                        {fmt(row.realShipped)} u
+                      </td>
+                      <td
+                        className={`py-2.5 px-2.5 text-right font-mono tabular-nums font-semibold whitespace-nowrap ${
+                          row.slackUnassigned > EPSILON ? 'text-amber-800' : 'text-emerald-800'
+                        }`}
+                      >
+                        {fmt(row.slackUnassigned)} u
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-700">{row.statusLabel}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-100 border-t border-slate-200 font-semibold text-[#0B1F3A]">
+                    <td className="py-2.5 px-3">Total oferta</td>
+                    <td className="py-2.5 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
+                      {fmt(slackAnalysis.totalSupplyAvailable)} u
+                    </td>
+                    <td className="py-2.5 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
+                      {fmt(slackAnalysis.totalRealShipped)} u
+                    </td>
+                    <td className="py-2.5 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
+                      {fmt(slackAnalysis.totalSlackUnassigned)} u
+                    </td>
+                    <td className="py-2.5 px-3 text-slate-600 font-normal">
+                      {slackAnalysis.totalSlackUnassigned > EPSILON
+                        ? 'Asignado a Destino Ficticio'
+                        : 'Oferta 100 % saturada'}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* Tabla de Sucursales (Restricciones de Demanda) */}
+            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-[#0B1F3A] text-white">
+                    <th className="text-left font-semibold py-2.5 px-3">Sucursal (Demanda)</th>
+                    <th className="text-right font-semibold py-2.5 px-2.5">Demanda req.</th>
+                    <th className="text-right font-semibold py-2.5 px-2.5">Recibido real</th>
+                    <th className="text-right font-semibold py-2.5 px-2.5">Holgura / Insatisfecha</th>
+                    <th className="text-left font-semibold py-2.5 px-3">Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  {slackAnalysis.demandRows.map((row) => (
+                    <tr
+                      key={`slack-dem-${row.destinationIndex}`}
+                      className={row.unmetDemand > EPSILON ? 'bg-amber-50/40' : 'hover:bg-slate-50/70'}
+                    >
+                      <td className="py-2.5 px-3 font-semibold text-[#0B1F3A] whitespace-nowrap">
+                        {row.destinationName}
+                      </td>
+                      <td className="py-2.5 px-2.5 text-right font-mono tabular-nums text-slate-800 whitespace-nowrap">
+                        {fmt(row.demandRequired)} u
+                      </td>
+                      <td className="py-2.5 px-2.5 text-right font-mono tabular-nums font-semibold text-[#0B1F3A] whitespace-nowrap">
+                        {fmt(row.realReceived)} u
+                      </td>
+                      <td
+                        className={`py-2.5 px-2.5 text-right font-mono tabular-nums font-semibold whitespace-nowrap ${
+                          row.unmetDemand > EPSILON ? 'text-amber-800' : 'text-emerald-800'
+                        }`}
+                      >
+                        {fmt(row.unmetDemand)} u
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-700">{row.statusLabel}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-100 border-t border-slate-200 font-semibold text-[#0B1F3A]">
+                    <td className="py-2.5 px-3">Total demanda</td>
+                    <td className="py-2.5 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
+                      {fmt(slackAnalysis.totalDemandRequired)} u
+                    </td>
+                    <td className="py-2.5 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
+                      {fmt(slackAnalysis.totalRealReceived)} u
+                    </td>
+                    <td className="py-2.5 px-2.5 text-right font-mono tabular-nums whitespace-nowrap">
+                      {fmt(slackAnalysis.totalUnmetDemand)} u
+                    </td>
+                    <td className="py-2.5 px-3 text-slate-600 font-normal">
+                      {slackAnalysis.totalUnmetDemand > EPSILON
+                        ? 'Cubierta por Origen Ficticio'
+                        : 'Demanda 100 % saturada'}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* 5. Matriz detallada de asignaciones (desplegable para mantener la vista limpia) */}
         <div className="pt-5 border-t border-slate-200">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>

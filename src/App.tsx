@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { AdvancedAnalysisSection } from './components/AdvancedAnalysisSection';
 import { Header } from './components/Header';
 import { HeroOverview } from './components/HeroOverview';
+import { MathematicalFormulationCard } from './components/MathematicalFormulationCard';
 import {
   DraftMatrixState,
   MatrixEditor,
@@ -94,6 +95,12 @@ export default function App() {
           errors={result.validation.errors}
           onDraftChange={handleDraftChange}
           onSelectPreset={handleSelectPreset}
+        />
+
+        <MathematicalFormulationCard
+          problem={problem}
+          balanced={result.balanced}
+          hasErrors={parseErrors.length > 0 || !result.validation.valid}
         />
 
         {/* 2, 3, 4 · Resultados, Análisis Avanzado y Reportes */}
