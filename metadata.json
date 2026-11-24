@@ -1,0 +1,6 @@
+{
+  "name": "OptiRoute – Zeli Distribuciones",
+  "description": "Aplicación académica de Investigación de Operaciones para resolver el modelo de transporte de Zeli Distribuciones mediante Costo Mínimo, Aproximación de Vogel y Optimización Exacta (MODI).",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
